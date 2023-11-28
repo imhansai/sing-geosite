@@ -3,9 +3,12 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 23 * * *"
+  push:
+    branches:
+      - main
+
 jobs:
   build:
-    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -64,3 +67,23 @@ jobs:
           asset_path: ./geosite.db.sha256sum
           asset_name: geosite.db.sha256sum
           asset_content_type: text/plain
+
+      - name: Git push assets to "release" branch
+        run: |
+          install -Dp ./geosite.db ./publish/geosite.db
+          cd publish || exit 1
+          git init
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "17228526+github-actions[bot]@users.noreply.github.com"
+          git checkout -b release
+          git add .
+          git commit -m "${{ steps.build.outputs.tagName }}"
+          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git push -f -u origin release
+
+      - name: CDN
+        run: |
+          cd publish || exit 1
+          for file in $(ls); do
+            curl -i "https://cdn.jsdelivr.net/gh/${{ github.repository }}@release/${file}"
+          done
